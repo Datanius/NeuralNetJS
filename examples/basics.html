@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Basic Example</title>
+    <meta charset="utf-8">
+
+    <script>
+        function popup(x, y, value) {
+
+            let popup = document.querySelector(".popup");
+            popup.classList.remove("hidden");
+            popup.style.position = "absolute";
+            popup.style.top = y + "px";
+            popup.style.left = x + "px";
+            popup.style.backgroundColor = "white";
+            popup.style.border = "1px solid black";
+            popup.style.padding = "10px";
+            popup.style.borderRadius = "10px";
+            popup.style.boxShadow = "0 0 10px black";
+            popup.style.zIndex = "1000";
+
+            value = JSON.stringify(value, null, 2);
+
+            popup.innerHTML = "<pre>" + value + "</pre>";
+
+            document.body.appendChild(popup);
+        }
+    </script>
+
+    <script type="module">
+        import { Neuron, InitialNeuron } from "../src/Neuron.js";
+        import { Layer } from "../src/Layer.js";
+        import { Network } from "../src/Network.js";
+        import { NetworkGraph } from "../src/NetworkGraph.js";
+
+        let resizeTimeout;
+
+        window.addEventListener("load", () => {
+            let inputs = [new InitialNeuron(3), new InitialNeuron(11), new InitialNeuron(15)];
+
+            let layer1 = Array.apply(null, {length: 10}).map(() => new Neuron(inputs));
+            let layer2 = Array.apply(null, {length: 20}).map(() => new Neuron(layer1));
+            let layer3 = Array.apply(null, {length: 15}).map(() => new Neuron(layer2));
+            let layer4 = Array.apply(null, {length: 3}).map(() => new Neuron(layer3));
+            let layer5 = Array.apply(null, {length: 1}).map(() => new Neuron(layer4));
+
+
+            let network = new Network([
+
+                new Layer(inputs),
+                new Layer(layer1),
+                new Layer(layer2),
+                new Layer(layer3),
+                new Layer(layer4),
+                new Layer(layer5)
+            ]);
+
+            let networkGraph = new NetworkGraph(network);
+
+            window.networkGraph = networkGraph;
+
+            let svg = document.querySelector("svg");
+
+            svg.setAttribute("width", window.innerWidth);
+            svg.setAttribute("height", window.innerHeight - 10);
+
+            svg.appendChild(networkGraph.toSVG(0, 0, 1000, 500));
+
+            svg.appendChild(networkGraph.getConnections());
+        })
+
+        window.addEventListener("resize", () => {
+
+            clearTimeout(resizeTimeout);
+            
+            resizeTimeout = setTimeout(() => {
+                document.querySelector("svg")
+                .setAttribute("width", window.innerWidth)
+                .setAttribute("height", window.innerHeight);
+            }, 200);
+        })
+
+        window.addEventListener("mouseover", (e) => {
+            if (e.target.tagName == "circle") {
+                // add popup
+                popup(e.clientX, e.clientY, e.target.dataset);
+
+            } else {
+                // remove popup
+                let popup = document.querySelector(".popup");
+                if (popup) {
+                    popup.classList.add("hidden");
+                }
+            }
+        });
+    </script>
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        body {
+            background: radial-gradient(circle, rgba(17,17,17,1) 0%, rgba(18,18,18,1) 50%, rgba(18,18,18,1) 100%);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        svg circle {
+            stroke: #fff;
+        }
+
+        svg text {
+            fill: #fff;
+        }
+    </style>
+</head>
+<body>
+    <svg viewBox="0 0 1000 500"></svg>
+    <div class="popup hidden"></div>
+</body>
+</html>
