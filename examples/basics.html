@@ -26,34 +26,38 @@
             document.body.appendChild(popup);
         }
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script type="module">
-        import { Neuron, InitialNeuron } from "../src/Neuron.js";
-        import { Layer } from "../src/Layer.js";
+        import { Neuron, InitialNeuron, OutputNeuron } from "../src/Neuron.js";
+        import { Layer, OutputLayer, InputLayer } from "../src/Layer.js";
         import { Network } from "../src/Network.js";
         import { NetworkGraph } from "../src/NetworkGraph.js";
 
         let resizeTimeout;
+        let backpropagationInterval;
+
+        let trainedWeigths = [[[[1],0],[[1],0]],[[[0.09486783811909498,-0.15143563525831258],-0.3197528157863869],[[0.6212078239795439,0.484198870326713],-0.1119792962947916],[[-0.3945807187746154,-0.37757766967787987],-0.07658916728119211],[[0.3129573935414192,0.11080710546598775],-0.316515526748873],[[0.6594467011372832,0.4498560793379345],0.24378823303608568]],[[[0.31519264412716935,-0.4606755043054775,0.5281284581645035,0.014910887796452436,-0.620640652765472],0.3988633163820374],[[0.3208573026874153,-0.35301402984378627,0.15773345975912328,0.46200789563090916,0.3131163157377321],0.3183768517228353],[[-0.04148462081144713,0.27438744686957933,-0.1367232721379232,-0.3356291632799051,0.05872661166707125],0.22787725364602365],[[0.023323576084684147,0.6029317846168183,-0.1624972165625279,0.11155694592310321,0.5650862889713268],-0.36440553771957246]],[[[-0.6540618405968487,0.17325974863137938,0.15486390146700155,0.8342583762558976],-0.14075704243490336]]];
+
+        window.costLogger = [];
 
         window.addEventListener("load", () => {
-            let inputs = [new InitialNeuron(3), new InitialNeuron(11), new InitialNeuron(15)];
 
-            let layer1 = Array.apply(null, {length: 10}).map(() => new Neuron(inputs));
-            let layer2 = Array.apply(null, {length: 20}).map(() => new Neuron(layer1));
-            let layer3 = Array.apply(null, {length: 15}).map(() => new Neuron(layer2));
-            let layer4 = Array.apply(null, {length: 3}).map(() => new Neuron(layer3));
-            let layer5 = Array.apply(null, {length: 1}).map(() => new Neuron(layer4));
-
+            let trainingSamples = [
+                {"input": [3, 5], "target": 8},
+                {"input": [1, 4], "target": 5},
+                {"input": [1, 1], "target": 2},
+                {"input": [7, 9], "target": 18}
+            ];
 
             let network = new Network([
-
-                new Layer(inputs),
-                new Layer(layer1),
-                new Layer(layer2),
-                new Layer(layer3),
-                new Layer(layer4),
-                new Layer(layer5)
+                new InputLayer(2),
+                new Layer(5),
+                new Layer(4),
+                new OutputLayer(1)
             ]);
+
+            network.loadWeights(trainedWeigths);
 
             let networkGraph = new NetworkGraph(network);
 
@@ -62,11 +66,32 @@
             let svg = document.querySelector("svg");
 
             svg.setAttribute("width", window.innerWidth);
-            svg.setAttribute("height", window.innerHeight - 10);
+            svg.setAttribute("height", window.innerHeight - 300);
 
             svg.appendChild(networkGraph.toSVG(0, 0, 1000, 500));
 
             svg.appendChild(networkGraph.getConnections());
+
+            let currentTrainingSampleIndex = 0;
+
+            backpropagationInterval = setInterval(() => {
+                network.setTrainingSamples(trainingSamples);
+                //network.train();
+                network.feedforward({"input": [3, 9], "target": 60});
+                //if (network.loss() < 0.0001) {
+                if (window.stopTraining === true) {
+                    clearInterval(backpropagationInterval);
+                    console.log(network.weights());
+                }
+                
+                svg.innerHTML = "";
+                svg.appendChild(networkGraph.toSVG(0, 0, 1000, 500));
+                svg.appendChild(networkGraph.getConnections());
+
+                chart.data.datasets[0].data = window.costLogger;
+                chart.update();
+            }, 50);
+
         })
 
         window.addEventListener("resize", () => {
@@ -74,9 +99,9 @@
             clearTimeout(resizeTimeout);
             
             resizeTimeout = setTimeout(() => {
-                document.querySelector("svg")
-                .setAttribute("width", window.innerWidth)
-                .setAttribute("height", window.innerHeight);
+                let svg = document.querySelector("svg")
+                svg.setAttribute("width", window.innerWidth)
+                svg.setAttribute("height", window.innerHeight);
             }, 200);
         })
 
@@ -122,10 +147,60 @@
         svg text {
             fill: #fff;
         }
+
+        svg text.error {
+            fill: rgb(249, 132, 132);
+        }
+
+
     </style>
 </head>
 <body>
     <svg viewBox="0 0 1000 500"></svg>
     <div class="popup hidden"></div>
+
+    <div>
+        <canvas id="myChart" height="270"></canvas>
+    </div>
+    <script>
+        const ctx = document.getElementById('myChart');
+
+        Chart.defaults.backgroundColor = '#000';
+        Chart.defaults.borderColor = '#444';
+        Chart.defaults.color = '#000';
+
+        let chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array.from({ length: 10000 }, (_, i) => i + 1),
+                datasets: [{
+                    label: "Test",
+                    data: window.costLogger,
+                    borderColor: "#fff",
+                    backgroundColor: "#fff"
+                }]
+            },
+            options: {
+                
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            color: "#777"
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            autoSkip: true,
+                            maxRotation: 0, // You can adjust this value as needed
+                            color: "#777"
+                        }
+                    }
+                }
+            }
+        });
+    </script>
 </body>
 </html>

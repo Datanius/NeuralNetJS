@@ -1,4 +1,4 @@
-import { InitialNeuron } from "./Neuron.js";
+import { InitialNeuron, OutputNeuron } from "./Neuron.js";
 
 export class NetworkGraph {
     constructor (network) {
@@ -16,6 +16,7 @@ export class NetworkGraph {
 
         let radius = Math.min(25, (Math.min(height, width) / 2) - strokeWidth);
         let fontSize = radius / 2;
+        let errorFontSize = fontSize / 1.5;
 
         const circleAttributes = {
             "r": radius,
@@ -30,6 +31,16 @@ export class NetworkGraph {
             "data-sum": neuron.sum().toFixed(2),
             "data-id": neuron.id
         };
+
+        let error;
+
+        if (neuron instanceof OutputNeuron) {
+            let cost = 0.5 * (neuron.value() - this.network.target) ** 2;
+            error = neuron.value() - this.network.target;
+            
+            circleAttributes["data-cost"] = cost.toFixed(2);
+            circleAttributes["data-error"] = error.toFixed(2);
+        }
 
         for (const [attr, value] of Object.entries(circleAttributes)) {
             circle.setAttribute(attr, value);
@@ -46,6 +57,23 @@ export class NetworkGraph {
         text.setAttribute("font-family", "monospace");
         text.setAttribute("pointer-events", "none");
         text.innerHTML = neuron.value().toFixed(1);
+
+        if (neuron instanceof OutputNeuron) {
+            let errorText = document.createElementNS("http://www.w3.org/2000/svg", "text");
+            errorText.setAttribute("x", x + (width / 2));
+            errorText.setAttribute("y", y + (height / 2) + fontSize);
+            errorText.setAttribute("text-anchor", "middle");
+            errorText.setAttribute("dominant-baseline", "central");
+            errorText.setAttribute("fill", "red");
+            errorText.setAttribute("font-size", `${errorFontSize}px`);
+            errorText.setAttribute("font-weight", "bold");
+            errorText.setAttribute("font-family", "monospace");
+            errorText.setAttribute("pointer-events", "none");
+            errorText.classList.add("error");
+            errorText.innerHTML = error.toFixed(2);
+
+            group.appendChild(errorText);
+        }
 
         group.appendChild(circle);
         group.appendChild(text);
@@ -96,7 +124,6 @@ export class NetworkGraph {
             layer.neurons.forEach(neuron => {
 
                 if (neuron instanceof InitialNeuron) {
-                    console.log("check");
                     return;
                 }
 
