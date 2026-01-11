@@ -148,9 +148,9 @@
             let totalDiff = 0;
             currentSamples.forEach(sample => {
                 network.setTrainingSample(sample);
-                let diff = network.lastLayer().feedforward(sample.target);
+                const diff = network.lastLayer().feedforward(sample.target);
                 totalDiff += diff ** 2;
-                network.backpropagate(network.lastLayer().feedforward(sample.target), learningRate);
+                network.backpropagate(diff, learningRate);
             });
 
             const cost = totalDiff / (2 * currentSamples.length);
