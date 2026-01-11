@@ -1,28 +1,29 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Basic Example</title>
+    <title>Neural Network - Interactive Learning Demo</title>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <script>
         function popup(x, y, value) {
-
             let popup = document.querySelector(".popup");
             popup.classList.remove("hidden");
             popup.style.position = "absolute";
             popup.style.top = y + "px";
             popup.style.left = x + "px";
-            popup.style.backgroundColor = "white";
-            popup.style.border = "1px solid black";
-            popup.style.padding = "10px";
-            popup.style.borderRadius = "10px";
-            popup.style.boxShadow = "0 0 10px black";
+            popup.style.backgroundColor = "rgba(30, 30, 30, 0.95)";
+            popup.style.border = "1px solid #4CAF50";
+            popup.style.padding = "12px";
+            popup.style.borderRadius = "8px";
+            popup.style.boxShadow = "0 4px 20px rgba(0,0,0,0.5)";
             popup.style.zIndex = "1000";
+            popup.style.color = "#fff";
+            popup.style.fontSize = "12px";
+            popup.style.fontFamily = "monospace";
 
             value = JSON.stringify(value, null, 2);
-
-            popup.innerHTML = "<pre>" + value + "</pre>";
-
+            popup.innerHTML = "<pre style='margin:0'>" + value + "</pre>";
             document.body.appendChild(popup);
         }
     </script>
@@ -35,83 +36,281 @@
         import { NetworkGraph } from "../src/NetworkGraph.js";
 
         let resizeTimeout;
-        let backpropagationInterval;
+        let trainingInterval = null;
+        let network = null;
+        let networkGraph = null;
+        let epoch = 0;
+        let isTraining = false;
 
-        let trainedWeigths = [[[[1],0],[[1],0]],[[[0.09486783811909498,-0.15143563525831258],-0.3197528157863869],[[0.6212078239795439,0.484198870326713],-0.1119792962947916],[[-0.3945807187746154,-0.37757766967787987],-0.07658916728119211],[[0.3129573935414192,0.11080710546598775],-0.316515526748873],[[0.6594467011372832,0.4498560793379345],0.24378823303608568]],[[[0.31519264412716935,-0.4606755043054775,0.5281284581645035,0.014910887796452436,-0.620640652765472],0.3988633163820374],[[0.3208573026874153,-0.35301402984378627,0.15773345975912328,0.46200789563090916,0.3131163157377321],0.3183768517228353],[[-0.04148462081144713,0.27438744686957933,-0.1367232721379232,-0.3356291632799051,0.05872661166707125],0.22787725364602365],[[0.023323576084684147,0.6029317846168183,-0.1624972165625279,0.11155694592310321,0.5650862889713268],-0.36440553771957246]],[[[-0.6540618405968487,0.17325974863137938,0.15486390146700155,0.8342583762558976],-0.14075704243490336]]];
+        // XOR problem - a classic neural network learning challenge
+        const xorSamples = [
+            {"input": [0, 0], "target": 0},
+            {"input": [0, 1], "target": 1},
+            {"input": [1, 0], "target": 1},
+            {"input": [1, 1], "target": 0}
+        ];
+
+        // AND gate samples
+        const andSamples = [
+            {"input": [0, 0], "target": 0},
+            {"input": [0, 1], "target": 0},
+            {"input": [1, 0], "target": 0},
+            {"input": [1, 1], "target": 1}
+        ];
+
+        // OR gate samples
+        const orSamples = [
+            {"input": [0, 0], "target": 0},
+            {"input": [0, 1], "target": 1},
+            {"input": [1, 0], "target": 1},
+            {"input": [1, 1], "target": 1}
+        ];
+
+        // Custom samples (user editable)
+        let customSamples = [
+            {"input": [0, 0], "target": 0},
+            {"input": [0, 1], "target": 1},
+            {"input": [1, 0], "target": 1},
+            {"input": [1, 1], "target": 0}
+        ];
+
+        let currentSamples = xorSamples;
 
         window.costLogger = [];
 
-        window.addEventListener("load", () => {
-
-            let trainingSamples = [
-                {"input": [3, 5], "target": 8},
-                {"input": [1, 4], "target": 5},
-                {"input": [1, 1], "target": 2},
-                {"input": [7, 9], "target": 18}
-            ];
-
-            let network = new Network([
+        function createNetwork() {
+            network = new Network([
                 new InputLayer(2),
-                new Layer(5),
+                new Layer(4),
                 new Layer(4),
                 new OutputLayer(1)
             ]);
-
-            network.loadWeights(trainedWeigths);
-
-            let networkGraph = new NetworkGraph(network);
-
+            
+            networkGraph = new NetworkGraph(network);
             window.networkGraph = networkGraph;
+            window.network = network;
+            
+            return network;
+        }
 
-            let svg = document.querySelector("svg");
-
-            svg.setAttribute("width", window.innerWidth);
-            svg.setAttribute("height", window.innerHeight - 300);
-
-            svg.appendChild(networkGraph.toSVG(0, 0, 1000, 500));
-
+        function updateDisplay() {
+            const svg = document.querySelector("svg");
+            svg.innerHTML = "";
+            svg.appendChild(networkGraph.toSVG(0, 0, 1000, 400));
             svg.appendChild(networkGraph.getConnections());
 
-            let currentTrainingSampleIndex = 0;
-
-            backpropagationInterval = setInterval(() => {
-                network.setTrainingSamples(trainingSamples);
-                //network.train();
-                network.feedforward({"input": [3, 9], "target": 60});
-                //if (network.loss() < 0.0001) {
-                if (window.stopTraining === true) {
-                    clearInterval(backpropagationInterval);
-                    console.log(network.weights());
-                }
-                
-                svg.innerHTML = "";
-                svg.appendChild(networkGraph.toSVG(0, 0, 1000, 500));
-                svg.appendChild(networkGraph.getConnections());
-
+            // Update chart (only if Chart.js is loaded)
+            if (typeof chart !== 'undefined') {
+                chart.data.labels = Array.from({ length: window.costLogger.length }, (_, i) => i + 1);
                 chart.data.datasets[0].data = window.costLogger;
                 chart.update();
-            }, 50);
+            }
 
-        })
+            // Update epoch display
+            document.getElementById("epochCount").textContent = epoch;
+
+            // Update current loss display
+            const currentLoss = window.costLogger.length > 0 
+                ? window.costLogger[window.costLogger.length - 1].toFixed(6) 
+                : "N/A";
+            document.getElementById("currentLoss").textContent = currentLoss;
+
+            // Update predictions table
+            updatePredictionsTable();
+        }
+
+        function updatePredictionsTable() {
+            const tbody = document.getElementById("predictionsBody");
+            tbody.innerHTML = "";
+
+            currentSamples.forEach((sample, idx) => {
+                network.feedforward(sample);
+                const prediction = network.lastLayer().neurons[0].value();
+                const error = Math.abs(prediction - sample.target);
+                const isCorrect = error < 0.3;
+
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>[${sample.input.join(", ")}]</td>
+                    <td>${sample.target}</td>
+                    <td class="${isCorrect ? 'correct' : 'incorrect'}">${prediction.toFixed(4)}</td>
+                    <td class="${isCorrect ? 'correct' : 'incorrect'}">${error.toFixed(4)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function trainStep() {
+            const learningRate = parseFloat(document.getElementById("learningRate").value);
+            network.samples = currentSamples;
+            
+            // Perform training
+            let totalDiff = 0;
+            currentSamples.forEach(sample => {
+                network.setTrainingSample(sample);
+                let diff = network.lastLayer().feedforward(sample.target);
+                totalDiff += diff ** 2;
+                network.backpropagate(network.lastLayer().feedforward(sample.target), learningRate);
+            });
+
+            const cost = totalDiff / (2 * currentSamples.length);
+            window.costLogger.push(cost);
+            epoch++;
+
+            // Display the current sample being processed
+            const currentSampleIdx = epoch % currentSamples.length;
+            network.feedforward(currentSamples[currentSampleIdx]);
+
+            updateDisplay();
+
+            // Auto-stop if loss is very small
+            if (cost < 0.0001) {
+                stopTraining();
+                document.getElementById("statusText").textContent = "Training Complete! Loss target reached.";
+                document.getElementById("statusText").style.color = "#4CAF50";
+            }
+        }
+
+        function startTraining() {
+            if (isTraining) return;
+            isTraining = true;
+            
+            const speed = parseInt(document.getElementById("trainingSpeed").value);
+            
+            document.getElementById("startBtn").disabled = true;
+            document.getElementById("stopBtn").disabled = false;
+            document.getElementById("statusText").textContent = "Training...";
+            document.getElementById("statusText").style.color = "#FFC107";
+
+            trainingInterval = setInterval(trainStep, speed);
+        }
+
+        function stopTraining() {
+            if (!isTraining) return;
+            isTraining = false;
+            
+            clearInterval(trainingInterval);
+            trainingInterval = null;
+            
+            document.getElementById("startBtn").disabled = false;
+            document.getElementById("stopBtn").disabled = true;
+            document.getElementById("statusText").textContent = "Paused";
+            document.getElementById("statusText").style.color = "#FF9800";
+        }
+
+        function resetNetwork() {
+            stopTraining();
+            epoch = 0;
+            window.costLogger = [];
+            createNetwork();
+            updateDisplay();
+            
+            document.getElementById("statusText").textContent = "Ready";
+            document.getElementById("statusText").style.color = "#4CAF50";
+        }
+
+        function changeDataset(dataset) {
+            stopTraining();
+            
+            switch(dataset) {
+                case 'xor':
+                    currentSamples = xorSamples;
+                    break;
+                case 'and':
+                    currentSamples = andSamples;
+                    break;
+                case 'or':
+                    currentSamples = orSamples;
+                    break;
+                case 'custom':
+                    currentSamples = customSamples;
+                    break;
+            }
+            
+            resetNetwork();
+            updateTrainingDataDisplay();
+        }
+
+        function updateTrainingDataDisplay() {
+            const container = document.getElementById("trainingDataDisplay");
+            container.innerHTML = "";
+            
+            currentSamples.forEach((sample, idx) => {
+                const div = document.createElement("div");
+                div.className = "sample-row";
+                div.innerHTML = `
+                    <span class="sample-label">Sample ${idx + 1}:</span>
+                    <input type="number" class="input-field" value="${sample.input[0]}" 
+                           onchange="window.updateCustomSample(${idx}, 0, this.value)" step="0.1">
+                    <input type="number" class="input-field" value="${sample.input[1]}" 
+                           onchange="window.updateCustomSample(${idx}, 1, this.value)" step="0.1">
+                    <span class="arrow">→</span>
+                    <input type="number" class="output-field" value="${sample.target}" 
+                           onchange="window.updateCustomTarget(${idx}, this.value)" step="0.1">
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.updateCustomSample = function(sampleIdx, inputIdx, value) {
+            customSamples[sampleIdx].input[inputIdx] = parseFloat(value);
+            if (document.getElementById("datasetSelect").value === 'custom') {
+                currentSamples = customSamples;
+            }
+        };
+
+        window.updateCustomTarget = function(sampleIdx, value) {
+            customSamples[sampleIdx].target = parseFloat(value);
+            if (document.getElementById("datasetSelect").value === 'custom') {
+                currentSamples = customSamples;
+            }
+        };
+
+        window.addEventListener("load", () => {
+            createNetwork();
+            
+            const svg = document.querySelector("svg");
+            svg.setAttribute("width", "100%");
+            svg.setAttribute("height", "100%");
+            
+            updateDisplay();
+            updateTrainingDataDisplay();
+
+            // Bind controls
+            document.getElementById("startBtn").addEventListener("click", startTraining);
+            document.getElementById("stopBtn").addEventListener("click", stopTraining);
+            document.getElementById("resetBtn").addEventListener("click", resetNetwork);
+            document.getElementById("stepBtn").addEventListener("click", () => {
+                if (!isTraining) trainStep();
+            });
+            document.getElementById("datasetSelect").addEventListener("change", (e) => {
+                changeDataset(e.target.value);
+            });
+
+            // Learning rate display update
+            document.getElementById("learningRate").addEventListener("input", (e) => {
+                document.getElementById("lrValue").textContent = e.target.value;
+            });
+
+            // Training speed display update
+            document.getElementById("trainingSpeed").addEventListener("input", (e) => {
+                document.getElementById("speedValue").textContent = e.target.value + "ms";
+                if (isTraining) {
+                    stopTraining();
+                    startTraining();
+                }
+            });
+        });
 
         window.addEventListener("resize", () => {
-
             clearTimeout(resizeTimeout);
-            
-            resizeTimeout = setTimeout(() => {
-                let svg = document.querySelector("svg")
-                svg.setAttribute("width", window.innerWidth)
-                svg.setAttribute("height", window.innerHeight);
-            }, 200);
-        })
+            resizeTimeout = setTimeout(updateDisplay, 200);
+        });
 
         window.addEventListener("mouseover", (e) => {
-            if (e.target.tagName == "circle") {
-                // add popup
+            if (e.target.tagName === "circle") {
                 popup(e.clientX, e.clientY, e.target.dataset);
-
             } else {
-                // remove popup
                 let popup = document.querySelector(".popup");
                 if (popup) {
                     popup.classList.add("hidden");
@@ -119,8 +318,8 @@
             }
         });
     </script>
-    <style>
 
+    <style>
         * {
             box-sizing: border-box;
         }
@@ -130,18 +329,217 @@
             padding: 0;
             width: 100%;
             height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
         body {
-            background: radial-gradient(circle, rgba(17,17,17,1) 0%, rgba(18,18,18,1) 50%, rgba(18,18,18,1) 100%);
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #fff;
+            overflow-x: hidden;
         }
 
         .hidden {
             display: none;
         }
 
+        .container {
+            display: grid;
+            grid-template-columns: 280px 1fr 300px;
+            grid-template-rows: auto 1fr auto;
+            gap: 15px;
+            padding: 15px;
+            height: 100vh;
+            max-height: 100vh;
+        }
+
+        header {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 10px 0;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.8em;
+            background: linear-gradient(90deg, #4CAF50, #2196F3, #9C27B0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        header p {
+            margin: 5px 0 0;
+            color: #888;
+            font-size: 0.9em;
+        }
+
+        .panel {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .panel h3 {
+            margin: 0 0 15px 0;
+            color: #4CAF50;
+            font-size: 1em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+        }
+
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-size: 0.85em;
+            color: #aaa;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+        }
+
+        .btn-start:hover:not(:disabled) {
+            background: linear-gradient(135deg, #5bc95f, #4CAF50);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            color: white;
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            background: linear-gradient(135deg, #ff5252, #f44336);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.4);
+        }
+
+        .btn-reset {
+            background: linear-gradient(135deg, #FF9800, #F57C00);
+            color: white;
+        }
+
+        .btn-reset:hover {
+            background: linear-gradient(135deg, #FFB74D, #FF9800);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(255, 152, 0, 0.4);
+        }
+
+        .btn-step {
+            background: linear-gradient(135deg, #2196F3, #1976D2);
+            color: white;
+        }
+
+        .btn-step:hover {
+            background: linear-gradient(135deg, #64B5F6, #2196F3);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.4);
+        }
+
+        .btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        select, input[type="range"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 0.9em;
+        }
+
+        select {
+            cursor: pointer;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            height: 8px;
+            padding: 0;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #4CAF50;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .slider-value {
+            text-align: center;
+            font-size: 0.85em;
+            color: #4CAF50;
+            margin-top: 5px;
+        }
+
+        .network-container {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .svg-container {
+            flex: 1;
+            min-height: 250px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+        }
+
         svg circle {
             stroke: #fff;
+            transition: all 0.1s ease;
+        }
+
+        svg circle:hover {
+            stroke: #4CAF50;
+            stroke-width: 3px;
         }
 
         svg text {
@@ -149,58 +547,308 @@
         }
 
         svg text.error {
-            fill: rgb(249, 132, 132);
+            fill: #ff6b6b;
         }
 
+        svg line {
+            opacity: 0.6;
+        }
 
+        .chart-container {
+            height: 180px;
+            margin-top: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        .stats-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .stat-box {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-box .value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .stat-box .label {
+            font-size: 0.8em;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 5px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #4CAF50;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .predictions-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+        }
+
+        .predictions-table th,
+        .predictions-table td {
+            padding: 8px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .predictions-table th {
+            color: #888;
+            font-weight: normal;
+            text-transform: uppercase;
+            font-size: 0.8em;
+        }
+
+        .predictions-table .correct {
+            color: #4CAF50;
+        }
+
+        .predictions-table .incorrect {
+            color: #ff6b6b;
+        }
+
+        .sample-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .sample-label {
+            font-size: 0.8em;
+            color: #888;
+            min-width: 65px;
+        }
+
+        .input-field, .output-field {
+            width: 50px;
+            padding: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 4px;
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .input-field:focus, .output-field:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .arrow {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .popup {
+            pointer-events: none;
+        }
+
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto 1fr auto;
+            }
+            
+            .control-panel, .stats-panel {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            }
+        }
     </style>
 </head>
 <body>
-    <svg viewBox="0 0 1000 500"></svg>
+    <div class="container">
+        <header>
+            <h1>🧠 Neural Network Learning Demo</h1>
+            <p>Watch a neural network learn in real-time | Set inputs & outputs, then train!</p>
+        </header>
+
+        <div class="panel control-panel">
+            <h3>⚙️ Controls</h3>
+            
+            <div class="control-group">
+                <label>Dataset</label>
+                <select id="datasetSelect">
+                    <option value="xor">XOR Gate (Classic)</option>
+                    <option value="and">AND Gate</option>
+                    <option value="or">OR Gate</option>
+                    <option value="custom">Custom</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Learning Rate: <span id="lrValue">0.1</span></label>
+                <input type="range" id="learningRate" min="0.001" max="1" step="0.001" value="0.1">
+            </div>
+
+            <div class="control-group">
+                <label>Training Speed: <span id="speedValue">50ms</span></label>
+                <input type="range" id="trainingSpeed" min="10" max="500" step="10" value="50">
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-start" id="startBtn">▶ Start</button>
+                <button class="btn btn-stop" id="stopBtn" disabled>⏹ Stop</button>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-step" id="stepBtn">⏭ Step</button>
+                <button class="btn btn-reset" id="resetBtn">↺ Reset</button>
+            </div>
+
+            <div class="control-group">
+                <h3>📊 Training Data</h3>
+                <div id="trainingDataDisplay"></div>
+            </div>
+        </div>
+
+        <div class="panel network-container">
+            <h3>🔗 Network Visualization</h3>
+            <div class="svg-container">
+                <svg viewBox="0 0 1000 400"></svg>
+            </div>
+            <div class="chart-container">
+                <canvas id="myChart"></canvas>
+            </div>
+        </div>
+
+        <div class="panel stats-panel">
+            <h3>📈 Statistics</h3>
+            
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span id="statusText" style="color: #4CAF50;">Ready</span>
+            </div>
+
+            <div class="stat-box">
+                <div class="value" id="epochCount">0</div>
+                <div class="label">Epochs</div>
+            </div>
+
+            <div class="stat-box">
+                <div class="value" id="currentLoss">N/A</div>
+                <div class="label">Current Loss</div>
+            </div>
+
+            <div class="control-group">
+                <h3>🎯 Predictions</h3>
+                <table class="predictions-table">
+                    <thead>
+                        <tr>
+                            <th>Input</th>
+                            <th>Expected</th>
+                            <th>Output</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody id="predictionsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <div class="popup hidden"></div>
 
-    <div>
-        <canvas id="myChart" height="270"></canvas>
-    </div>
     <script>
-        const ctx = document.getElementById('myChart');
+        let chart;
+        try {
+            const ctx = document.getElementById('myChart');
 
-        Chart.defaults.backgroundColor = '#000';
-        Chart.defaults.borderColor = '#444';
-        Chart.defaults.color = '#000';
+            if (typeof Chart !== 'undefined') {
+                Chart.defaults.backgroundColor = '#000';
+                Chart.defaults.borderColor = '#333';
+                Chart.defaults.color = '#888';
 
-        let chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: Array.from({ length: 10000 }, (_, i) => i + 1),
-                datasets: [{
-                    label: "Test",
-                    data: window.costLogger,
-                    borderColor: "#fff",
-                    backgroundColor: "#fff"
-                }]
-            },
-            options: {
-                
-                maintainAspectRatio: false,
-                animation: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            color: "#777"
-                        }
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: "Loss (MSE)",
+                            data: window.costLogger,
+                            borderColor: "#4CAF50",
+                            backgroundColor: "rgba(76, 175, 80, 0.1)",
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0
+                        }]
                     },
-                    x: {
-                        ticks: {
-                            autoSkip: true,
-                            maxRotation: 0, // You can adjust this value as needed
-                            color: "#777"
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                labels: {
+                                    color: '#888',
+                                    font: { size: 11 }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: 'rgba(255,255,255,0.05)' },
+                                ticks: { color: "#777", font: { size: 10 } }
+                            },
+                            x: {
+                                grid: { color: 'rgba(255,255,255,0.05)' },
+                                ticks: {
+                                    autoSkip: true,
+                                    maxTicksLimit: 10,
+                                    maxRotation: 0,
+                                    color: "#777",
+                                    font: { size: 10 }
+                                }
+                            }
                         }
                     }
-                }
+                });
+            } else {
+                console.log('Chart.js not available, loss chart will not be displayed');
+                document.querySelector('.chart-container').innerHTML = '<div style="text-align:center;color:#888;padding:20px;">Loss chart unavailable</div>';
             }
-        });
+        } catch (e) {
+            console.log('Chart initialization error:', e);
+        }
     </script>
 </body>
 </html>
