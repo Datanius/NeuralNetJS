@@ -1,6 +1,7 @@
 FROM nginx:alpine
 
 # Copy the application files
+COPY index.html /usr/share/nginx/html/
 COPY examples/ /usr/share/nginx/html/examples/
 COPY src/ /usr/share/nginx/html/src/
 COPY resources/ /usr/share/nginx/html/resources/
