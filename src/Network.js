@@ -66,10 +66,8 @@ export class Network {
         }
     }
 
-    backpropagate(costGradient) {
+    backpropagate(costGradient, learningRate = 0.001) {
         let partialError = [];
-
-        let learningRate = 0.001;
 
         let layers = [...this.layers];
 

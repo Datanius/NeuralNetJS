@@ -1,28 +1,36 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Basic Example</title>
+    <title>NeuralNet Studio | Interactive AI Learning Platform</title>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Experience neural network learning in real-time with our beautiful interactive visualization platform">
+    
+    <!-- Google Fonts - Premium Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <script>
         function popup(x, y, value) {
-
             let popup = document.querySelector(".popup");
             popup.classList.remove("hidden");
             popup.style.position = "absolute";
-            popup.style.top = y + "px";
-            popup.style.left = x + "px";
-            popup.style.backgroundColor = "white";
-            popup.style.border = "1px solid black";
-            popup.style.padding = "10px";
-            popup.style.borderRadius = "10px";
-            popup.style.boxShadow = "0 0 10px black";
+            popup.style.top = (y + 10) + "px";
+            popup.style.left = (x + 10) + "px";
+            popup.style.background = "linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(30, 41, 59, 0.95))";
+            popup.style.border = "1px solid rgba(139, 92, 246, 0.5)";
+            popup.style.padding = "16px";
+            popup.style.borderRadius = "16px";
+            popup.style.boxShadow = "0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 40px rgba(139, 92, 246, 0.15)";
             popup.style.zIndex = "1000";
+            popup.style.color = "#e2e8f0";
+            popup.style.fontSize = "13px";
+            popup.style.fontFamily = "'JetBrains Mono', monospace";
+            popup.style.backdropFilter = "blur(20px)";
 
             value = JSON.stringify(value, null, 2);
-
-            popup.innerHTML = "<pre>" + value + "</pre>";
-
+            popup.innerHTML = "<pre style='margin:0; color: #a5b4fc;'>" + value + "</pre>";
             document.body.appendChild(popup);
         }
     </script>
@@ -35,83 +43,281 @@
         import { NetworkGraph } from "../src/NetworkGraph.js";
 
         let resizeTimeout;
-        let backpropagationInterval;
+        let trainingInterval = null;
+        let network = null;
+        let networkGraph = null;
+        let epoch = 0;
+        let isTraining = false;
 
-        let trainedWeigths = [[[[1],0],[[1],0]],[[[0.09486783811909498,-0.15143563525831258],-0.3197528157863869],[[0.6212078239795439,0.484198870326713],-0.1119792962947916],[[-0.3945807187746154,-0.37757766967787987],-0.07658916728119211],[[0.3129573935414192,0.11080710546598775],-0.316515526748873],[[0.6594467011372832,0.4498560793379345],0.24378823303608568]],[[[0.31519264412716935,-0.4606755043054775,0.5281284581645035,0.014910887796452436,-0.620640652765472],0.3988633163820374],[[0.3208573026874153,-0.35301402984378627,0.15773345975912328,0.46200789563090916,0.3131163157377321],0.3183768517228353],[[-0.04148462081144713,0.27438744686957933,-0.1367232721379232,-0.3356291632799051,0.05872661166707125],0.22787725364602365],[[0.023323576084684147,0.6029317846168183,-0.1624972165625279,0.11155694592310321,0.5650862889713268],-0.36440553771957246]],[[[-0.6540618405968487,0.17325974863137938,0.15486390146700155,0.8342583762558976],-0.14075704243490336]]];
+        // XOR problem - a classic neural network learning challenge
+        const xorSamples = [
+            {"input": [0, 0], "target": 0},
+            {"input": [0, 1], "target": 1},
+            {"input": [1, 0], "target": 1},
+            {"input": [1, 1], "target": 0}
+        ];
+
+        // AND gate samples
+        const andSamples = [
+            {"input": [0, 0], "target": 0},
+            {"input": [0, 1], "target": 0},
+            {"input": [1, 0], "target": 0},
+            {"input": [1, 1], "target": 1}
+        ];
+
+        // OR gate samples
+        const orSamples = [
+            {"input": [0, 0], "target": 0},
+            {"input": [0, 1], "target": 1},
+            {"input": [1, 0], "target": 1},
+            {"input": [1, 1], "target": 1}
+        ];
+
+        // Custom samples (user editable)
+        let customSamples = [
+            {"input": [0, 0], "target": 0},
+            {"input": [0, 1], "target": 1},
+            {"input": [1, 0], "target": 1},
+            {"input": [1, 1], "target": 0}
+        ];
+
+        let currentSamples = xorSamples;
 
         window.costLogger = [];
 
-        window.addEventListener("load", () => {
-
-            let trainingSamples = [
-                {"input": [3, 5], "target": 8},
-                {"input": [1, 4], "target": 5},
-                {"input": [1, 1], "target": 2},
-                {"input": [7, 9], "target": 18}
-            ];
-
-            let network = new Network([
+        function createNetwork() {
+            network = new Network([
                 new InputLayer(2),
-                new Layer(5),
+                new Layer(4),
                 new Layer(4),
                 new OutputLayer(1)
             ]);
-
-            network.loadWeights(trainedWeigths);
-
-            let networkGraph = new NetworkGraph(network);
-
+            
+            networkGraph = new NetworkGraph(network);
             window.networkGraph = networkGraph;
+            window.network = network;
+            
+            return network;
+        }
 
-            let svg = document.querySelector("svg");
-
-            svg.setAttribute("width", window.innerWidth);
-            svg.setAttribute("height", window.innerHeight - 300);
-
-            svg.appendChild(networkGraph.toSVG(0, 0, 1000, 500));
-
+        function updateDisplay() {
+            const svg = document.querySelector("svg");
+            svg.innerHTML = "";
+            svg.appendChild(networkGraph.toSVG(0, 0, 1000, 400));
             svg.appendChild(networkGraph.getConnections());
 
-            let currentTrainingSampleIndex = 0;
-
-            backpropagationInterval = setInterval(() => {
-                network.setTrainingSamples(trainingSamples);
-                //network.train();
-                network.feedforward({"input": [3, 9], "target": 60});
-                //if (network.loss() < 0.0001) {
-                if (window.stopTraining === true) {
-                    clearInterval(backpropagationInterval);
-                    console.log(network.weights());
-                }
-                
-                svg.innerHTML = "";
-                svg.appendChild(networkGraph.toSVG(0, 0, 1000, 500));
-                svg.appendChild(networkGraph.getConnections());
-
+            // Update chart (only if Chart.js is loaded)
+            if (typeof chart !== 'undefined') {
+                chart.data.labels = Array.from({ length: window.costLogger.length }, (_, i) => i + 1);
                 chart.data.datasets[0].data = window.costLogger;
                 chart.update();
-            }, 50);
+            }
 
-        })
+            // Update epoch display
+            document.getElementById("epochCount").textContent = epoch;
+
+            // Update current loss display
+            const currentLoss = window.costLogger.length > 0 
+                ? window.costLogger[window.costLogger.length - 1].toFixed(6) 
+                : "N/A";
+            document.getElementById("currentLoss").textContent = currentLoss;
+
+            // Update predictions table
+            updatePredictionsTable();
+        }
+
+        function updatePredictionsTable() {
+            const tbody = document.getElementById("predictionsBody");
+            tbody.innerHTML = "";
+
+            currentSamples.forEach((sample, idx) => {
+                network.feedforward(sample);
+                const prediction = network.lastLayer().neurons[0].value();
+                const error = Math.abs(prediction - sample.target);
+                const isCorrect = error < 0.3;
+
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>[${sample.input.join(", ")}]</td>
+                    <td>${sample.target}</td>
+                    <td class="${isCorrect ? 'correct' : 'incorrect'}">${prediction.toFixed(4)}</td>
+                    <td class="${isCorrect ? 'correct' : 'incorrect'}">${error.toFixed(4)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function trainStep() {
+            const learningRate = parseFloat(document.getElementById("learningRate").value);
+            network.samples = currentSamples;
+            
+            // Perform training
+            let totalDiff = 0;
+            currentSamples.forEach(sample => {
+                network.setTrainingSample(sample);
+                const diff = network.lastLayer().feedforward(sample.target);
+                totalDiff += diff ** 2;
+                network.backpropagate(diff, learningRate);
+            });
+
+            const cost = totalDiff / (2 * currentSamples.length);
+            window.costLogger.push(cost);
+            epoch++;
+
+            // Display the current sample being processed
+            const currentSampleIdx = epoch % currentSamples.length;
+            network.feedforward(currentSamples[currentSampleIdx]);
+
+            updateDisplay();
+
+            // Auto-stop if loss is very small
+            if (cost < 0.0001) {
+                stopTraining();
+                document.getElementById("statusText").textContent = "✓ Training Complete!";
+                document.getElementById("statusText").style.color = "#10b981";
+            }
+        }
+
+        function startTraining() {
+            if (isTraining) return;
+            isTraining = true;
+            
+            const speed = parseInt(document.getElementById("trainingSpeed").value);
+            
+            document.getElementById("startBtn").disabled = true;
+            document.getElementById("stopBtn").disabled = false;
+            document.getElementById("statusText").textContent = "Training...";
+            document.getElementById("statusText").style.color = "#f59e0b";
+
+            trainingInterval = setInterval(trainStep, speed);
+        }
+
+        function stopTraining() {
+            if (!isTraining) return;
+            isTraining = false;
+            
+            clearInterval(trainingInterval);
+            trainingInterval = null;
+            
+            document.getElementById("startBtn").disabled = false;
+            document.getElementById("stopBtn").disabled = true;
+            document.getElementById("statusText").textContent = "⏸ Paused";
+            document.getElementById("statusText").style.color = "#f59e0b";
+        }
+
+        function resetNetwork() {
+            stopTraining();
+            epoch = 0;
+            window.costLogger = [];
+            createNetwork();
+            updateDisplay();
+            
+            document.getElementById("statusText").textContent = "● Ready";
+            document.getElementById("statusText").style.color = "#10b981";
+        }
+
+        function changeDataset(dataset) {
+            stopTraining();
+            
+            switch(dataset) {
+                case 'xor':
+                    currentSamples = xorSamples;
+                    break;
+                case 'and':
+                    currentSamples = andSamples;
+                    break;
+                case 'or':
+                    currentSamples = orSamples;
+                    break;
+                case 'custom':
+                    currentSamples = customSamples;
+                    break;
+            }
+            
+            resetNetwork();
+            updateTrainingDataDisplay();
+        }
+
+        function updateTrainingDataDisplay() {
+            const container = document.getElementById("trainingDataDisplay");
+            container.innerHTML = "";
+            
+            currentSamples.forEach((sample, idx) => {
+                const div = document.createElement("div");
+                div.className = "sample-row";
+                div.innerHTML = `
+                    <span class="sample-label">Sample ${idx + 1}:</span>
+                    <input type="number" class="input-field" value="${sample.input[0]}" 
+                           onchange="window.updateCustomSample(${idx}, 0, this.value)" step="0.1">
+                    <input type="number" class="input-field" value="${sample.input[1]}" 
+                           onchange="window.updateCustomSample(${idx}, 1, this.value)" step="0.1">
+                    <span class="arrow">→</span>
+                    <input type="number" class="output-field" value="${sample.target}" 
+                           onchange="window.updateCustomTarget(${idx}, this.value)" step="0.1">
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        window.updateCustomSample = function(sampleIdx, inputIdx, value) {
+            customSamples[sampleIdx].input[inputIdx] = parseFloat(value);
+            if (document.getElementById("datasetSelect").value === 'custom') {
+                currentSamples = customSamples;
+            }
+        };
+
+        window.updateCustomTarget = function(sampleIdx, value) {
+            customSamples[sampleIdx].target = parseFloat(value);
+            if (document.getElementById("datasetSelect").value === 'custom') {
+                currentSamples = customSamples;
+            }
+        };
+
+        window.addEventListener("load", () => {
+            createNetwork();
+            
+            const svg = document.querySelector("svg");
+            svg.setAttribute("width", "100%");
+            svg.setAttribute("height", "100%");
+            
+            updateDisplay();
+            updateTrainingDataDisplay();
+
+            // Bind controls
+            document.getElementById("startBtn").addEventListener("click", startTraining);
+            document.getElementById("stopBtn").addEventListener("click", stopTraining);
+            document.getElementById("resetBtn").addEventListener("click", resetNetwork);
+            document.getElementById("stepBtn").addEventListener("click", () => {
+                if (!isTraining) trainStep();
+            });
+            document.getElementById("datasetSelect").addEventListener("change", (e) => {
+                changeDataset(e.target.value);
+            });
+
+            // Learning rate display update
+            document.getElementById("learningRate").addEventListener("input", (e) => {
+                document.getElementById("lrValue").textContent = e.target.value;
+            });
+
+            // Training speed display update
+            document.getElementById("trainingSpeed").addEventListener("input", (e) => {
+                document.getElementById("speedValue").textContent = e.target.value + "ms";
+                if (isTraining) {
+                    stopTraining();
+                    startTraining();
+                }
+            });
+        });
 
         window.addEventListener("resize", () => {
-
             clearTimeout(resizeTimeout);
-            
-            resizeTimeout = setTimeout(() => {
-                let svg = document.querySelector("svg")
-                svg.setAttribute("width", window.innerWidth)
-                svg.setAttribute("height", window.innerHeight);
-            }, 200);
-        })
+            resizeTimeout = setTimeout(updateDisplay, 200);
+        });
 
         window.addEventListener("mouseover", (e) => {
-            if (e.target.tagName == "circle") {
-                // add popup
+            if (e.target.tagName === "circle") {
                 popup(e.clientX, e.clientY, e.target.dataset);
-
             } else {
-                // remove popup
                 let popup = document.querySelector(".popup");
                 if (popup) {
                     popup.classList.add("hidden");
@@ -119,88 +325,958 @@
             }
         });
     </script>
+
     <style>
+        :root {
+            --primary: #8b5cf6;
+            --primary-light: #a78bfa;
+            --primary-dark: #7c3aed;
+            --secondary: #06b6d4;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg-dark: #0f172a;
+            --bg-card: rgba(15, 23, 42, 0.8);
+            --bg-elevated: rgba(30, 41, 59, 0.6);
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: rgba(148, 163, 184, 0.1);
+            --glow: rgba(139, 92, 246, 0.4);
+        }
 
         * {
             box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         html, body {
-            margin: 0;
-            padding: 0;
+            width: 100%;
+            height: 100%;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        body {
+            background: 
+                radial-gradient(ellipse 80% 50% at 50% -20%, rgba(139, 92, 246, 0.15), transparent),
+                radial-gradient(ellipse 60% 40% at 100% 100%, rgba(6, 182, 212, 0.1), transparent),
+                radial-gradient(ellipse 40% 30% at 0% 100%, rgba(16, 185, 129, 0.08), transparent),
+                linear-gradient(180deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+            background-attachment: fixed;
+        }
+
+        /* Animated background particles */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                radial-gradient(2px 2px at 20px 30px, rgba(139, 92, 246, 0.3), transparent),
+                radial-gradient(2px 2px at 40px 70px, rgba(6, 182, 212, 0.2), transparent),
+                radial-gradient(1px 1px at 90px 40px, rgba(255, 255, 255, 0.3), transparent),
+                radial-gradient(2px 2px at 130px 80px, rgba(139, 92, 246, 0.2), transparent),
+                radial-gradient(1px 1px at 160px 30px, rgba(16, 185, 129, 0.3), transparent);
+            background-size: 200px 100px;
+            animation: sparkle 20s linear infinite;
+            pointer-events: none;
+            opacity: 0.6;
+            z-index: 0;
+        }
+
+        @keyframes sparkle {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-100px); }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 320px 1fr 340px;
+            grid-template-rows: auto 1fr;
+            gap: 24px;
+            padding: 24px;
+            height: 100vh;
+            max-height: 100vh;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        header {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 28px 40px;
+            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(30, 41, 59, 0.4) 100%);
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            backdrop-filter: blur(20px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--primary), var(--secondary), var(--primary), transparent);
+            opacity: 0.6;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #fff 0%, var(--primary-light) 50%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+            text-shadow: 0 0 80px rgba(139, 92, 246, 0.5);
+        }
+
+        header .logo-icon {
+            display: inline-block;
+            margin-right: 12px;
+            font-size: 0.9em;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        header p {
+            color: var(--text-secondary);
+            font-size: 1.05em;
+            font-weight: 400;
+            letter-spacing: 0.02em;
+        }
+
+        header .badge {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-left: 12px;
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
+            50% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.6); }
+        }
+
+        /* Panels */
+        .panel {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 24px;
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .panel:hover {
+            border-color: rgba(139, 92, 246, 0.3);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3), 0 0 60px rgba(139, 92, 246, 0.1);
+        }
+
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(139, 92, 246, 0.5), transparent);
+        }
+
+        .panel h3 {
+            margin: 0 0 20px 0;
+            font-size: 0.85em;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel h3 .icon {
+            font-size: 1.2em;
+            filter: drop-shadow(0 0 8px currentColor);
+        }
+
+        .panel h3::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, var(--border), transparent);
+            margin-left: 12px;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-group label {
+            font-size: 0.85em;
+            font-weight: 500;
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .control-group label span {
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--primary-light);
+            font-weight: 600;
+            font-size: 0.95em;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 14px 24px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9em;
+            font-family: inherit;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, var(--success), #059669);
+            color: white;
+            box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-start:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(16, 185, 129, 0.5);
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, var(--danger), #dc2626);
+            color: white;
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(239, 68, 68, 0.5);
+        }
+
+        .btn-reset {
+            background: linear-gradient(135deg, var(--warning), #d97706);
+            color: white;
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-reset:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(245, 158, 11, 0.5);
+        }
+
+        .btn-step {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+            box-shadow: 0 4px 20px rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-step:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(139, 92, 246, 0.5);
+        }
+
+        .btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        /* Select & Inputs */
+        select {
+            width: 100%;
+            padding: 14px 16px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: 0.95em;
+            font-family: inherit;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 18px;
+        }
+
+        select:hover, select:focus {
+            border-color: var(--primary);
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15);
+        }
+
+        select option {
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            padding: 12px;
+        }
+
+        /* Range Sliders */
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: var(--bg-elevated);
+            border: none;
+            outline: none;
+            -webkit-appearance: none;
+            appearance: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 22px;
+            height: 22px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.5);
+            transition: all 0.2s ease;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.7);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 22px;
+            height: 22px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.5);
+        }
+
+        /* Network Container */
+        .network-container {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .svg-container {
+            flex: 1;
+            min-height: 280px;
+            background: 
+                radial-gradient(ellipse at center, rgba(139, 92, 246, 0.05) 0%, transparent 70%),
+                var(--bg-elevated);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            position: relative;
+        }
+
+        .svg-container::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(139, 92, 246, 0.1), transparent 70%);
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        svg {
             width: 100%;
             height: 100%;
         }
 
-        body {
-            background: radial-gradient(circle, rgba(17,17,17,1) 0%, rgba(18,18,18,1) 50%, rgba(18,18,18,1) 100%);
-        }
-
-        .hidden {
-            display: none;
-        }
-
         svg circle {
-            stroke: #fff;
+            stroke: rgba(255, 255, 255, 0.8);
+            stroke-width: 2;
+            transition: all 0.2s ease;
+            filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.3));
+        }
+
+        svg circle:hover {
+            stroke: var(--primary);
+            stroke-width: 3;
+            filter: drop-shadow(0 0 12px rgba(139, 92, 246, 0.8));
         }
 
         svg text {
-            fill: #fff;
+            fill: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
         }
 
         svg text.error {
-            fill: rgb(249, 132, 132);
+            fill: var(--danger);
         }
 
+        svg line {
+            stroke: rgba(139, 92, 246, 0.3);
+            transition: stroke 0.2s ease;
+        }
 
+        /* Chart Container */
+        .chart-container {
+            height: 160px;
+            margin-top: 16px;
+            background: var(--bg-elevated);
+            border-radius: 16px;
+            padding: 16px;
+            border: 1px solid var(--border);
+        }
+
+        /* Stats Panel */
+        .stats-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 18px;
+            background: linear-gradient(135deg, var(--bg-elevated), rgba(30, 41, 59, 0.4));
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .status-dot {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+            animation: status-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes status-pulse {
+            0%, 100% { 
+                opacity: 1; 
+                box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+            }
+            50% { 
+                opacity: 0.7; 
+                box-shadow: 0 0 30px rgba(16, 185, 129, 0.8);
+            }
+        }
+
+        #statusText {
+            font-weight: 600;
+            font-size: 1em;
+            letter-spacing: 0.02em;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, var(--bg-elevated), rgba(30, 41, 59, 0.4));
+            padding: 24px;
+            border-radius: 16px;
+            text-align: center;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .stat-box:hover {
+            border-color: rgba(139, 92, 246, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .stat-box .value {
+            font-size: 2.4em;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            background: linear-gradient(135deg, var(--primary-light), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1.2;
+        }
+
+        .stat-box .label {
+            font-size: 0.75em;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            margin-top: 8px;
+        }
+
+        /* Predictions Table */
+        .predictions-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 6px;
+            font-size: 0.85em;
+        }
+
+        .predictions-table th {
+            padding: 12px 8px;
+            text-align: center;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.75em;
+            letter-spacing: 0.1em;
+        }
+
+        .predictions-table td {
+            padding: 12px 8px;
+            text-align: center;
+            background: var(--bg-elevated);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+        }
+
+        .predictions-table tr td:first-child {
+            border-radius: 8px 0 0 8px;
+        }
+
+        .predictions-table tr td:last-child {
+            border-radius: 0 8px 8px 0;
+        }
+
+        .predictions-table .correct {
+            color: var(--success);
+            text-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+        }
+
+        .predictions-table .incorrect {
+            color: var(--danger);
+            text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+        }
+
+        /* Training Data Section */
+        .training-data-section {
+            margin-top: 8px;
+        }
+
+        .sample-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            padding: 10px 12px;
+            background: var(--bg-elevated);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            transition: all 0.2s ease;
+        }
+
+        .sample-row:hover {
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        .sample-label {
+            font-size: 0.8em;
+            font-weight: 600;
+            color: var(--text-muted);
+            min-width: 55px;
+        }
+
+        .input-field, .output-field {
+            width: 48px;
+            padding: 8px 6px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            text-align: center;
+            font-size: 0.9em;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .input-field:focus, .output-field:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+        }
+
+        .arrow {
+            color: var(--primary);
+            font-weight: bold;
+            font-size: 1.1em;
+            text-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+        }
+
+        .popup {
+            pointer-events: none;
+        }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-elevated);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--primary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-light);
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1400px) {
+            .container {
+                grid-template-columns: 280px 1fr 300px;
+                gap: 16px;
+                padding: 16px;
+            }
+        }
+
+        @media (max-width: 1200px) {
+            .container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto 1fr auto;
+                height: auto;
+                min-height: 100vh;
+            }
+            
+            .control-panel {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 16px;
+            }
+
+            .stats-panel {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                gap: 16px;
+            }
+
+            header h1 {
+                font-size: 1.8em;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+                gap: 12px;
+            }
+
+            header {
+                padding: 20px;
+            }
+
+            header h1 {
+                font-size: 1.4em;
+            }
+
+            .panel {
+                padding: 16px;
+            }
+
+            .btn {
+                padding: 12px 16px;
+                font-size: 0.85em;
+            }
+
+            .stat-box .value {
+                font-size: 1.8em;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+                color: black;
+            }
+
+            .panel {
+                background: white;
+                border: 1px solid #ddd;
+            }
+        }
     </style>
 </head>
 <body>
-    <svg viewBox="0 0 1000 500"></svg>
+    <div class="container">
+        <header>
+            <h1><span class="logo-icon">🧠</span>NeuralNet Studio<span class="badge">Live</span></h1>
+            <p>Experience neural network learning in real-time • Configure, train, and visualize</p>
+        </header>
+
+        <div class="panel control-panel">
+            <h3><span class="icon">⚙️</span> Controls</h3>
+            
+            <div class="control-group">
+                <label>Dataset</label>
+                <select id="datasetSelect">
+                    <option value="xor">🔀 XOR Gate (Classic)</option>
+                    <option value="and">🔗 AND Gate</option>
+                    <option value="or">⚡ OR Gate</option>
+                    <option value="custom">✏️ Custom</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Learning Rate <span id="lrValue">0.1</span></label>
+                <input type="range" id="learningRate" min="0.001" max="1" step="0.001" value="0.1">
+            </div>
+
+            <div class="control-group">
+                <label>Training Speed <span id="speedValue">50ms</span></label>
+                <input type="range" id="trainingSpeed" min="10" max="500" step="10" value="50">
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-start" id="startBtn">▶ Start</button>
+                <button class="btn btn-stop" id="stopBtn" disabled>⏹ Stop</button>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn btn-step" id="stepBtn">⏭ Step</button>
+                <button class="btn btn-reset" id="resetBtn">↺ Reset</button>
+            </div>
+
+            <div class="control-group training-data-section">
+                <h3><span class="icon">📊</span> Training Data</h3>
+                <div id="trainingDataDisplay"></div>
+            </div>
+        </div>
+
+        <div class="panel network-container">
+            <h3><span class="icon">🔗</span> Network Visualization</h3>
+            <div class="svg-container">
+                <svg viewBox="0 0 1000 400"></svg>
+            </div>
+            <div class="chart-container">
+                <canvas id="myChart"></canvas>
+            </div>
+        </div>
+
+        <div class="panel stats-panel">
+            <h3><span class="icon">📈</span> Statistics</h3>
+            
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span id="statusText" style="color: #10b981;">Ready</span>
+            </div>
+
+            <div class="stat-box">
+                <div class="value" id="epochCount">0</div>
+                <div class="label">Epochs</div>
+            </div>
+
+            <div class="stat-box">
+                <div class="value" id="currentLoss">N/A</div>
+                <div class="label">Current Loss</div>
+            </div>
+
+            <div class="control-group">
+                <h3><span class="icon">🎯</span> Predictions</h3>
+                <table class="predictions-table">
+                    <thead>
+                        <tr>
+                            <th>Input</th>
+                            <th>Target</th>
+                            <th>Output</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody id="predictionsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
     <div class="popup hidden"></div>
 
-    <div>
-        <canvas id="myChart" height="270"></canvas>
-    </div>
     <script>
-        const ctx = document.getElementById('myChart');
+        let chart;
+        try {
+            const ctx = document.getElementById('myChart');
 
-        Chart.defaults.backgroundColor = '#000';
-        Chart.defaults.borderColor = '#444';
-        Chart.defaults.color = '#000';
+            if (typeof Chart !== 'undefined') {
+                Chart.defaults.backgroundColor = 'transparent';
+                Chart.defaults.borderColor = 'rgba(148, 163, 184, 0.1)';
+                Chart.defaults.color = '#94a3b8';
 
-        let chart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: Array.from({ length: 10000 }, (_, i) => i + 1),
-                datasets: [{
-                    label: "Test",
-                    data: window.costLogger,
-                    borderColor: "#fff",
-                    backgroundColor: "#fff"
-                }]
-            },
-            options: {
-                
-                maintainAspectRatio: false,
-                animation: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            color: "#777"
-                        }
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: "Loss (MSE)",
+                            data: window.costLogger,
+                            borderColor: "#8b5cf6",
+                            backgroundColor: "rgba(139, 92, 246, 0.1)",
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            pointHoverBackgroundColor: "#8b5cf6"
+                        }]
                     },
-                    x: {
-                        ticks: {
-                            autoSkip: true,
-                            maxRotation: 0, // You can adjust this value as needed
-                            color: "#777"
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: false,
+                        interaction: {
+                            intersect: false,
+                            mode: 'index'
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                labels: {
+                                    color: '#94a3b8',
+                                    font: { 
+                                        size: 11,
+                                        family: "'Inter', sans-serif",
+                                        weight: 500
+                                    },
+                                    boxWidth: 12,
+                                    boxHeight: 12,
+                                    borderRadius: 3
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                                titleColor: '#f1f5f9',
+                                bodyColor: '#94a3b8',
+                                borderColor: 'rgba(139, 92, 246, 0.3)',
+                                borderWidth: 1,
+                                cornerRadius: 8,
+                                padding: 12,
+                                titleFont: { family: "'Inter', sans-serif", weight: 600 },
+                                bodyFont: { family: "'JetBrains Mono', monospace" }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                grid: { 
+                                    color: 'rgba(148, 163, 184, 0.08)',
+                                    drawBorder: false
+                                },
+                                ticks: { 
+                                    color: "#64748b", 
+                                    font: { 
+                                        size: 10,
+                                        family: "'JetBrains Mono', monospace"
+                                    }
+                                }
+                            },
+                            x: {
+                                grid: { 
+                                    color: 'rgba(148, 163, 184, 0.08)',
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    autoSkip: true,
+                                    maxTicksLimit: 8,
+                                    maxRotation: 0,
+                                    color: "#64748b",
+                                    font: { 
+                                        size: 10,
+                                        family: "'JetBrains Mono', monospace"
+                                    }
+                                }
+                            }
                         }
                     }
-                }
+                });
+            } else {
+                console.log('Chart.js not available, loss chart will not be displayed');
+                document.querySelector('.chart-container').innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#64748b;font-size:0.9em;">📊 Loss chart requires Chart.js</div>';
             }
-        });
+        } catch (e) {
+            console.log('Chart initialization error:', e);
+        }
     </script>
 </body>
 </html>
